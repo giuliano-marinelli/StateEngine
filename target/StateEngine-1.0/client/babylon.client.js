@@ -5,24 +5,30 @@ var socket;
 var socketID = "";
 
 var players = [];
+var testStates = [];
 
 window.onload = function () {
-    
+
     //crea la conexion con WebSocket
     var page = document.createElement('a');
     page.href = window.location.href;
-    
+
     //define la url del servidor como la hostname de la pagina y el puerto definido 8080 del ws
     var url = "ws://" + page.hostname + ":8080";
     socket = new WebSocket(url + "/StateEngine/GameWebSocket");
     socket.onmessage = stateUpdate;
 
+    var redMat = new BABYLON.StandardMaterial("red", scene);
+    redMat.diffuseColor = new BABYLON.Color3(1, 0, 0);
+    redMat.emissiveColor = new BABYLON.Color3(1, 0, 0);
+    redMat.specularColor = new BABYLON.Color3(1, 0, 0);
+
     //actualiza la vista del juego cuando recive un nuevo estado desde el servidor
     function stateUpdate(event) {
         //console.log(socket);
-        console.log(event.data);
+        //console.log(event.data);
         var gameState = JSON.parse(event.data);
-        console.log(gameState);
+        //console.log(gameState);
 
         var i = 0;
         while (typeof gameState[i] !== "undefined") {
@@ -31,6 +37,9 @@ window.onload = function () {
                 if (players[id] != null) {
                     players[id].dispose();
                     players[id] = null;
+                }else if (testStates[id] != null) {
+                    testStates[id].dispose();
+                    testStates[id] = null;
                 }
             } else if (typeof gameState[i]["Player"] !== "undefined") {
                 var id = gameState[i]["Player"]["super"]["Entity"]["super"]["State"]["id"];
@@ -53,6 +62,25 @@ window.onload = function () {
                 if (destroy) {
                     players[id].dispose();
                     players[id] = null;
+                }
+            } else if (typeof gameState[i]["TestState"] !== "undefined") {
+                var id = gameState[i]["TestState"]["super"]["Entity"]["super"]["State"]["id"];
+                var destroy = gameState[i]["TestState"]["super"]["Entity"]["super"]["State"]["destroy"];
+                var lastMove = gameState[i]["TestState"]["lastMove"];
+                var x = gameState[i]["TestState"]["super"]["Entity"]["x"];
+                var y = gameState[i]["TestState"]["super"]["Entity"]["y"];
+                // Create a sphere that we will be moved by the keyboard
+                if (testStates[id] == null) {
+                    testStates[id] = BABYLON.Mesh.CreateSphere(id, 16, 1, scene);
+                    testStates[id].material = redMat;
+                }
+                testStates[id].position.y = 1;
+                testStates[id].position.x = x;
+                testStates[id].position.z = y;
+
+                if (destroy) {
+                    testStates[id].dispose();
+                    testStates[id] = null;
                 }
             }
             i++;

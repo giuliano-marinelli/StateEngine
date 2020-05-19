@@ -1,11 +1,15 @@
 package engine;
 
+import babylongamelogic.Entity;
+import babylongamelogic.TestState;
 import babylongamelogic.World;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Phaser;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.json.simple.JSONArray;
@@ -26,6 +30,7 @@ public class Game implements Runnable {
     private String gameFullState;
     private String gameStaticState;
     private boolean endGame;
+    private boolean singleCore;
 
     private Lobby lobby;
 
@@ -40,46 +45,87 @@ public class Game implements Runnable {
         this.viewsBarrier = new Phaser(1);
         this.endGame = false;
         this.lobby = lobby;
+        this.singleCore = false;
     }
 
     @Override
     public void run() {
         init();
         createStaticState();
-        LinkedList<State> nextStates;
-        LinkedList<State> newStates;
         while (!endGame) {
             try {
-                Thread.sleep(100); //time per frame (10 fps)
+                Thread.sleep(10); //time per frame (10 fps)
                 //readPlayers();
                 readActions();
-                //se realizan las comunicaciones a traves de eventos y 
-                //se generan nuevos estados que seran computados
-                newStates = new LinkedList<>();
-                for (State state : states) {
-                    LinkedList<State> newState = state.generate(states, staticStates, actions);
-                    if (newState != null) {
-                        newStates.addAll(newState);
+
+                if (singleCore) {
+                    //se realizan las comunicaciones a traves de eventos y 
+                    //se generan nuevos estados que seran computados
+                    LinkedList<State> newStates = new LinkedList<>();
+                    for (State state : states) {
+                        LinkedList<State> newState = state.generate(states, staticStates, actions);
+                        if (newState != null) {
+                            newStates.addAll(newState);
+                        }
                     }
+                    states.addAll(newStates);
+
+                    //se generan los estados siguientes incluyendo los generados
+                    LinkedList<State> nextStates = new LinkedList<>();
+                    for (State state : states) {
+                        nextStates.add(state.next(states, staticStates, actions));
+                    }
+
+                    //se crean los nuevos estados con los calculados anteriormente
+                    for (int i = 0; i < states.size(); i++) {
+                        states.get(i).createState(nextStates.get(i));
+                        states.get(i).clearEvents();
+                    }
+                } else {
+                    //se realizan las comunicaciones a traves de eventos y 
+                    //se generan nuevos estados que seran computados
+                    final ConcurrentLinkedQueue<State> newStates = new ConcurrentLinkedQueue<>();
+                    states.parallelStream().forEach(new Consumer<State>() {
+                        @Override
+                        public void accept(State state) {
+                            LinkedList<State> newState = state.generate(states, staticStates, actions);
+                            if (newState != null) {
+                                newStates.addAll(newState);
+                            }
+                        }
+                    });
+                    states.addAll(newStates);
+
+                    //se generan los estados siguientes incluyendo los generados
+                    final ConcurrentHashMap<State, State> nextStates = new ConcurrentHashMap<>();
+                    states.parallelStream().forEach(new Consumer<State>() {
+                        @Override
+                        public void accept(State state) {
+                            nextStates.put(state, state.next(states, staticStates, actions));
+                        }
+                    });
+
+                    //se crean los nuevos estados con los calculados anteriormente
+                    states.parallelStream().forEachOrdered(new Consumer<State>() {
+                        @Override
+                        public void accept(State state) {
+                            state.createState(nextStates.get(state));
+                            state.clearEvents();
+                        }
+                    });
                 }
-                states.addAll(newStates);
-                //se generan los estados siguientes incluyendo los generados
-                nextStates = new LinkedList<>();
-                for (State state : states) {
-                    nextStates.add(state.next(states, staticStates, actions));
-                }
-                //se crean los nuevos estados con los calculados anteriormente
-                for (int i = 0; i < states.size(); i++) {
-                    states.get(i).createState(nextStates.get(i));
-                    states.get(i).clearEvents();
-                }
+
+                //crea el nuevo estado del juego
                 createState();
+
                 //recorre los player que entran o salen del juego para agregarlos
                 //o quitarlos de la lista de gameViews
                 readPlayers();
+
                 //despierta a los hilos para que generen el JSON con el estado
                 //correspondiente a la visibilidad de cada jugador
                 viewsBarrier.arriveAndAwaitAdvance();
+
                 //barrera hasta que todos los hilos terminan de computar el estado
                 viewsBarrier.arriveAndAwaitAdvance();
                 lobby.stateReady();
@@ -92,6 +138,7 @@ public class Game implements Runnable {
                         i++;
                     }
                 }
+
                 //System.out.println("STATIC: " + gameStaticState);
                 //System.out.println("DYNAMIC: " + gameFullState);
             } catch (InterruptedException ex) {
@@ -104,7 +151,9 @@ public class Game implements Runnable {
         //TODO crear estados dinamicos y estaticos
         /*Babylon init*/
         states.add(new World(new LinkedList<String>(), "World", false, null));
-
+        for (int i = 1; i < 1000; i++) {
+            states.add(new TestState(true, 1, i, "TestState" + i, false, null));
+        }
         /*Phaser init*/
         //try {
         /*File map = new File(this.getClass().getClassLoader().getResource("files/map.csv").toURI());
