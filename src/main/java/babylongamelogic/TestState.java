@@ -86,8 +86,8 @@ public class TestState extends Entity {
 
     @Override
     public JSONObject toJSON(String sessionId, LinkedList<State> states, LinkedList<StaticState> staticStates, HashMap<String, LinkedList<Action>> actions, JSONObject lastState) {
-        //JSONObject superJSON = super.toJSON(sessionId, states, staticStates, actions, lastState);
-        return toJSON();//superJSON != null && !isJSONRemover(superJSON) ? toJSON() : superJSON;
+        JSONObject superJSON = super.toJSON(sessionId, states, staticStates, actions, lastState);
+        return superJSON != null && !isJSONRemover(superJSON) ? toJSON() : superJSON;
     }
 
 }

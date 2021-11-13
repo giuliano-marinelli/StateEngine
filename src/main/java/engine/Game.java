@@ -54,7 +54,7 @@ public class Game implements Runnable {
         createStaticState();
         while (!endGame) {
             try {
-                Thread.sleep(10); //time per frame (10 fps)
+                Thread.sleep(100); //time per frame (10 fps)
                 //readPlayers();
                 readActions();
 
@@ -116,7 +116,7 @@ public class Game implements Runnable {
                 }
 
                 //crea el nuevo estado del juego
-                createState();
+                //createState();
 
                 //recorre los player que entran o salen del juego para agregarlos
                 //o quitarlos de la lista de gameViews
